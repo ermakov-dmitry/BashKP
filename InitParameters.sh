@@ -12,14 +12,14 @@ declare -x RLS1_angle=120  # 60 * 2
 declare -x RLS2_x=8000
 declare -x RLS2_y=6000
 declare -x RLS2_alpha=45
-declare -x RLS1_range=7000
-declare -x RLS1_angle=90
+declare -x RLS2_range=7000
+declare -x RLS2_angle=90
 
 declare -x RLS3_x=8000
 declare -x RLS3_y=3500
 declare -x RLS3_alpha=270
-declare -x RLS1_range=4000
-declare -x RLS1_angle=200
+declare -x RLS3_range=4000
+declare -x RLS3_angle=200
 
 #ZRDN params
 declare -x ZRDN1_x=2950

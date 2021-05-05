@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
-# import os
+
 import csv
-# import subprocess
+import subprocess
+import os
 import numpy as np
 import math
 
 
-def createStructIdWithCoord(filename):
+def createMapIdWithCoord(filename):
     targets = {}
     with open(filename, encoding='utf-8') as r_file:
         file_reader = csv.reader(r_file, delimiter=",")
@@ -18,25 +19,18 @@ def createStructIdWithCoord(filename):
     return targets
 
 
-def checkPoint(radius, x, y, percent, startAngle):
-    # calculate endAngle
-    endAngle = 360 / percent + startAngle
-
-    # Calculate polar co-ordinates
-    polarradius = math.sqrt(x * x + y * y)
-    Angle = math.atan(y / x)
-
-    # Check whether polarradius is less
-    # then radius of circle or not and
-    # Angle is between startAngle and
-    # endAngle or not
-    if startAngle <= Angle <= endAngle and polarradius < radius:
-        print("Point (", x, ",", y, ") "
-                                    "exist in the circle sector")
+def checkPoint(radius, x, y, percent, start_angle):
+    end_angle = 360 / percent + start_angle
+    polar_radius = math.sqrt(x * x + y * y)
+    try:
+        angle = math.atan(y / x)
+    except ZeroDivisionError:
+        angle = math.pi / 2
+    if angle < 0:
+        angle += 2 * math.pi
+    if start_angle <= angle <= end_angle and polar_radius < radius:
         return True
     else:
-        print("Point (", x, ",", y, ") "
-                                    "does not exist in the circle sector")
         return False
 
 
@@ -59,20 +53,96 @@ def checkCollision(a, b, c, x, y, radius):
 def checkRLS(point, RLS_x, RLS_y, RLS_alpha, RLS_range, RLS_angle):
     current_x = point[0] - RLS_x
     current_y = point[1] - RLS_y
-    percent = RLS_angle / 360
-    start_angle = RLS_alpha - RLS_range / 2
+    percent = (RLS_angle / 360) * 100
+    start_angle = np.deg2rad(RLS_alpha - RLS_angle / 2)
     return checkPoint(RLS_range, current_x, current_y, percent, start_angle)
 
 
-targets_old = createStructIdWithCoord('Files/TargetsDataOldStep.csv')
-targets_cur = createStructIdWithCoord('Files/TargetsDataCurStep.csv')
+def checkCircle(point, obj_x, obj_y, obj_range):
+    current_x = point[0] - obj_x
+    current_y = point[1] - obj_y
+    percent = 100
+    start_angle = 0
+    return checkPoint(obj_range, current_x, current_y, percent, start_angle)
 
-for key, value in targets_old.items():
-    cur_xy = targets_cur.get(key)
-    #print(value, '-', cur_xy)
 
-    # check RLS1
+targets = createMapIdWithCoord('Files/TargetsDataStep.csv')
+RLS1_targets = []
+RLS2_targets = []
+RLS3_targets = []
+ZRDN1_targets = []
+ZRDN2_targets = []
+ZRDN3_targets = []
+SPRO_targets = []
 
-# need black list points
 
-# print(os.environ["RLS1_x"])
+for key, value in targets.items():
+    inside = checkRLS(value,
+                      float(os.environ["RLS1_x"]),
+                      float(os.environ["RLS1_y"]),
+                      float(os.environ["RLS1_alpha"]),
+                      float(os.environ["RLS1_range"]),
+                      float(os.environ["RLS1_angle"]))
+    if inside:
+        RLS1_targets.append(key)
+
+    inside = checkRLS(value,
+                      float(os.environ["RLS2_x"]),
+                      float(os.environ["RLS2_y"]),
+                      float(os.environ["RLS2_alpha"]),
+                      float(os.environ["RLS2_range"]),
+                      float(os.environ["RLS2_angle"]))
+    if inside:
+        RLS2_targets.append(key)
+
+    inside = checkRLS(value,
+                      float(os.environ["RLS3_x"]),
+                      float(os.environ["RLS3_y"]),
+                      float(os.environ["RLS3_alpha"]),
+                      float(os.environ["RLS3_range"]),
+                      float(os.environ["RLS3_angle"]))
+    if inside:
+        RLS3_targets.append(key)
+
+    inside = checkCircle(value,
+                         float(os.environ["ZRDN1_x"]),
+                         float(os.environ["ZRDN1_y"]),
+                         float(os.environ["ZRDN1_range"]))
+    if inside:
+        ZRDN1_targets.append(key)
+        continue
+
+    inside = checkCircle(value,
+                         float(os.environ["ZRDN2_x"]),
+                         float(os.environ["ZRDN2_y"]),
+                         float(os.environ["ZRDN2_range"]))
+    if inside:
+        ZRDN2_targets.append(key)
+        continue
+
+    inside = checkCircle(value,
+                         float(os.environ["ZRDN3_x"]),
+                         float(os.environ["ZRDN3_y"]),
+                         float(os.environ["ZRDN3_range"]))
+    if inside:
+        ZRDN3_targets.append(key)
+        continue
+
+    inside = checkCircle(value,
+                         float(os.environ["SPRO_x"]),
+                         float(os.environ["SPRO_y"]),
+                         float(os.environ["SPRO_range"]))
+    if inside:
+        SPRO_targets.append(key)
+        continue
+
+print('--->iter<---')
+print(RLS1_targets)
+print(RLS2_targets)
+print(RLS3_targets)
+print(ZRDN1_targets)
+print(ZRDN2_targets)
+print(ZRDN3_targets)
+print(SPRO_targets)
+
+
