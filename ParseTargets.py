@@ -2,16 +2,15 @@
 
 
 import csv
-import subprocess
 import os
 import numpy as np
 import math
 
 
 def createMapIdWithCoord(filename):
-    targets = {}
     with open(filename, encoding='utf-8') as r_file:
         file_reader = csv.reader(r_file, delimiter=",")
+        targets = {}
         for row in file_reader:
             target_id = row[0]
             target_xy = np.array([float(row[1][1:]) / 1000, float(row[2][1:]) / 1000])
@@ -35,19 +34,17 @@ def checkPoint(radius, x, y, percent, start_angle):
 
 
 def checkCollision(a, b, c, x, y, radius):
-    # Finding the distance of line
-    # from center.
     dist = ((abs(a * x + b * y + c)) /
             math.sqrt(a * a + b * b))
-
-    # Checking if the distance is less
-    # than, greater than or equal to radius.
-    if (radius == dist):
+    if radius == dist:
         print("Touch")
-    elif (radius > dist):
+        return False
+    elif radius > dist:
         print("Intersect")
+        return True
     else:
         print("Outside")
+        return False
 
 
 def checkRLS(point, RLS_x, RLS_y, RLS_alpha, RLS_range, RLS_angle):
@@ -144,5 +141,3 @@ print(ZRDN1_targets)
 print(ZRDN2_targets)
 print(ZRDN3_targets)
 print(SPRO_targets)
-
-

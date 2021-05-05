@@ -3,13 +3,13 @@
 source ./InitParameters.sh
 
 mkdir -p Files
-last_targets=`pwd`/Files/LastTargets.csv
+last_targets=`pwd`/Files/LastTargets
 targets_dir=/tmp/GenTargets/Targets/
 StepDir=`pwd`/Files/TargetsDataStep.csv
 :> $last_targets
 num_targets=50  # number of last targets
 
-delta_t=1
+delta_t=0.1
 for ((;;))
 do
 
