@@ -2,6 +2,7 @@
 
 source ./InitParameters.sh
 
+rm -rf Files/
 mkdir -p Files
 last_targets=`pwd`/Files/LastTargets
 targets_dir=/tmp/GenTargets/Targets/
@@ -9,12 +10,12 @@ StepDir=`pwd`/Files/TargetsDataStep.csv
 :> $last_targets
 num_targets=50  # number of last targets
 
-delta_t=0.1
+delta_t=1
 for ((;;))
 do
 
   sleep $delta_t  # delta_t >= Sleeptime
-  ls -t $targets_dir | sort | tail -n $num_targets > $last_targets  # find last n files
+  ls -t $targets_dir | tail -n $num_targets > $last_targets  # find last n files  sort |
   cat /dev/null > $StepDir
 
   while read line

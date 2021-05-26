@@ -3,7 +3,6 @@
 
 import csv
 import os
-import numpy as np
 import math
 
 
@@ -13,7 +12,7 @@ def createMapIdWithCoord(filename):
         targets = {}
         for row in file_reader:
             target_id = row[0]
-            target_xy = np.array([float(row[1][1:]) / 1000, float(row[2][1:]) / 1000])
+            target_xy = [float(row[1][1:]) / 1000, float(row[2][1:]) / 1000]
             targets[target_id] = target_xy
     return targets
 
@@ -33,25 +32,11 @@ def checkPoint(radius, x, y, percent, start_angle):
         return False
 
 
-def checkCollision(a, b, c, x, y, radius):
-    dist = ((abs(a * x + b * y + c)) /
-            math.sqrt(a * a + b * b))
-    if radius == dist:
-        print("Touch")
-        return False
-    elif radius > dist:
-        print("Intersect")
-        return True
-    else:
-        print("Outside")
-        return False
-
-
 def checkRLS(point, RLS_x, RLS_y, RLS_alpha, RLS_range, RLS_angle):
     current_x = point[0] - RLS_x
     current_y = point[1] - RLS_y
     percent = (RLS_angle / 360) * 100
-    start_angle = np.deg2rad(RLS_alpha - RLS_angle / 2)
+    start_angle = (RLS_alpha - RLS_angle / 2) * math.pi / 180
     return checkPoint(RLS_range, current_x, current_y, percent, start_angle)
 
 
@@ -64,14 +49,14 @@ def checkCircle(point, obj_x, obj_y, obj_range):
 
 
 targets = createMapIdWithCoord('Files/TargetsDataStep.csv')
-RLS1_targets = []
-RLS2_targets = []
-RLS3_targets = []
-ZRDN1_targets = []
-ZRDN2_targets = []
-ZRDN3_targets = []
-SPRO_targets = []
 
+radar1_targets = open('Files/Radar1Targets', 'w')
+radar2_targets = open('Files/Radar2Targets', 'w')
+radar3_targets = open('Files/Radar3Targets', 'w')
+zrdn1_targets = open('Files/ZRDN1Targets', 'w')
+zrdn2_targets = open('Files/ZRDN2Targets', 'w')
+zrdn3_targets = open('Files/ZRDN3Targets', 'w')
+spro_targets = open('Files/SPROTargets', 'w')
 
 for key, value in targets.items():
     inside = checkRLS(value,
@@ -81,7 +66,7 @@ for key, value in targets.items():
                       float(os.environ["RLS1_range"]),
                       float(os.environ["RLS1_angle"]))
     if inside:
-        RLS1_targets.append(key)
+        radar1_targets.write(key + '\n')
 
     inside = checkRLS(value,
                       float(os.environ["RLS2_x"]),
@@ -90,7 +75,7 @@ for key, value in targets.items():
                       float(os.environ["RLS2_range"]),
                       float(os.environ["RLS2_angle"]))
     if inside:
-        RLS2_targets.append(key)
+        radar2_targets.write(key + '\n')
 
     inside = checkRLS(value,
                       float(os.environ["RLS3_x"]),
@@ -99,14 +84,14 @@ for key, value in targets.items():
                       float(os.environ["RLS3_range"]),
                       float(os.environ["RLS3_angle"]))
     if inside:
-        RLS3_targets.append(key)
+        radar3_targets.write(key + '\n')
 
     inside = checkCircle(value,
                          float(os.environ["ZRDN1_x"]),
                          float(os.environ["ZRDN1_y"]),
                          float(os.environ["ZRDN1_range"]))
     if inside:
-        ZRDN1_targets.append(key)
+        zrdn1_targets.write(key + '\n')
         continue
 
     inside = checkCircle(value,
@@ -114,7 +99,7 @@ for key, value in targets.items():
                          float(os.environ["ZRDN2_y"]),
                          float(os.environ["ZRDN2_range"]))
     if inside:
-        ZRDN2_targets.append(key)
+        zrdn2_targets.write(key + '\n')
         continue
 
     inside = checkCircle(value,
@@ -122,7 +107,7 @@ for key, value in targets.items():
                          float(os.environ["ZRDN3_y"]),
                          float(os.environ["ZRDN3_range"]))
     if inside:
-        ZRDN3_targets.append(key)
+        zrdn3_targets.write(key + '\n')
         continue
 
     inside = checkCircle(value,
@@ -130,14 +115,14 @@ for key, value in targets.items():
                          float(os.environ["SPRO_y"]),
                          float(os.environ["SPRO_range"]))
     if inside:
-        SPRO_targets.append(key)
+        spro_targets.write(key + '\n')
         continue
 
-print('--->iter<---')
-print(RLS1_targets)
-print(RLS2_targets)
-print(RLS3_targets)
-print(ZRDN1_targets)
-print(ZRDN2_targets)
-print(ZRDN3_targets)
-print(SPRO_targets)
+
+radar1_targets.close()
+radar2_targets.close()
+radar3_targets.close()
+zrdn1_targets.close()
+zrdn2_targets.close()
+zrdn3_targets.close()
+spro_targets.close()
