@@ -8,8 +8,15 @@ import sqlite3 as sq
 global conn
 global cursor
 
-conn = sq.connect('TargetList.db')
+conn = sq.connect('Files/TargetList.db')
 cursor = conn.cursor()
+
+cursor.execute("""CREATE TABLE IF NOT EXISTS TargetStatus (
+                    id TEXT PRIMARY KEY, 
+                    x REAL,
+                    y REAL,
+                    status MESSAGE_TEXT)""")
+conn.commit()  # создаем таблицу, если ее нет
 
 
 def calcSpeed(xy0, xy1, dt):
@@ -18,15 +25,15 @@ def calcSpeed(xy0, xy1, dt):
     return sqrt(vx ** 2 + vy ** 2) * 1000  # m/s
 
 
-def isWaitOrDestroyed(filename, id):
-    with open(filename, encoding='utf-8') as r_file:
-        file_reader = csv.reader(r_file, delimiter=",")
-        for row in file_reader:
-            if not row:
-                break
-            if row[0] == id and (row[3] == 'wait' or row[3] == 'destroyed'):
-                return True
-        return False
+def isWaitOrDestroyed(id_):
+    status_ = ''
+    for value in cursor.execute("SELECT * FROM TargetStatus"):
+        if not value:
+            break
+        status_ = value[3]
+        if value[0] == id_ and (status_ == 'wait' or status_ == 'destroyed'):
+            return True, status_
+    return False, status_
 
 
 ammunition = 10
@@ -65,18 +72,24 @@ while True:
                         targets_coord[row[0]].append([x_prev, y_prev])
                         target_data = targets_coord.get(row[0])  # добавляем список списков с данными по цели
                         target_speed = calcSpeed(target_data[1], target_data[0], dt)
-                        if 8000 <= target_speed <= 10000 and not isWaitOrDestroyed('Files/TargetList.csv', row[0]) and fire_mode:
-                            with open('Files/TargetList.csv', 'a') as fd:
-                                id_ = str(row[0])
-                                x_l = str(target_data[0][0])
-                                y_l = str(target_data[0][1])
-                                status = 'wait'
-                                fd.write(id_ + ',' + x_l + ',' + y_l + ',' + status + '\n')
-                                print('Пуск ракеты по цели {id}'.format(id=id_))
-                                ammunition -= 1
-                                write_dir = '/tmp/GenTargets/Destroy/' + id_  # write to tmp/Destroy
-                                open(write_dir, 'w+').close()
+                        is_wod, target_status = isWaitOrDestroyed(row[0])
+                        if 8000 <= target_speed <= 10000 and not is_wod and fire_mode:
+                            id_ = str(row[0])
+                            x_l = str(target_data[0][0])
+                            y_l = str(target_data[0][1])
+                            status = 'wait'
+                            data = id_, x_l, y_l, status
+                            if target_status == 'miss':
+                                cursor.execute("UPDATE TargetStatus SET status = 'wait' WHERE id = (?)", (id_,))
+                            else:
+                                cursor.execute("INSERT INTO TargetStatus VALUES (?, ?, ?, ?)", data)
+                            conn.commit()
+                            print('Пуск ракеты по цели {id}'.format(id=id_))
+                            ammunition -= 1
+                            write_dir = '/tmp/GenTargets/Destroy/' + id_  # write to tmp/Destroy
+                            open(write_dir, 'w+').close()
 
         sleep(dt)
     except ValueError:
         continue
+conn.close()
