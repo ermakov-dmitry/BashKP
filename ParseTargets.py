@@ -56,7 +56,7 @@ radar3_targets = open('Files/Radar3Targets', 'w')
 zrdn1_targets = open('Files/ZRDN1Targets', 'w')
 zrdn2_targets = open('Files/ZRDN2Targets', 'w')
 zrdn3_targets = open('Files/ZRDN3Targets', 'w')
-spro_targets = open('Files/SPROTargets', 'w')
+spro_targets = open('Files/SPRO1Targets', 'w')
 
 for key, value in targets.items():
     inside = checkRLS(value,

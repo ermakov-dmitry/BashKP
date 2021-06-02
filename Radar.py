@@ -4,6 +4,9 @@
 import csv
 from math import sqrt
 from time import sleep
+import sys
+import subprocess
+from datetime import datetime as dtime
 
 
 def calcAbc(xy1, xy0):
@@ -30,14 +33,17 @@ def calcSpeed(xy0, xy1, dt):
     return sqrt(vx ** 2 + vy ** 2) * 1000  # m/s
 
 
-dt = 1  # float(os.environ["delta_t"])
+dt = 1
 radar_targets = set()
 ignore_targets = set()
 detected_targets = set()
 spro_x = 2500
 spro_y = 2500
 spro_radius = 1700
-filename = 'Files/Radar2Targets'
+filename = 'Files/' + sys.argv[1] + 'Targets'
+bash_command = "echo " + str(dtime.now().strftime("%Y-%m-%d %H:%M:%S"))\
+                                           + ' --- ' + sys.argv[1] + ': ' + 'Запущен!' + " >> Files/LogFile.txt"
+subprocess.run(bash_command, shell=True)
 
 while True:
     try:
@@ -55,8 +61,13 @@ while True:
                         y_last = float(row[2][1:]) / 1000
                         targets_coord[row[0]] = [[x_last, y_last]]
                         if row[0] not in detected_targets:
-                            print('Обнаружена цель ID:{id} с координатами x = {x} y = {y}'
-                                  .format(id=row[0], x=x_last, y=y_last))
+                            out_text = 'Обнаружена цель ID:{id} с координатами x = {x} y = {y}'.format(id=row[0],
+                                                                                                       x=x_last,
+                                                                                                       y=y_last)
+                            print(out_text)
+                            bash_command = "echo " + str(dtime.now().strftime("%Y-%m-%d %H:%M:%S"))\
+                                           + ' --- ' + sys.argv[1] + ': ' + out_text + " >> Files/LogFile.txt"
+                            subprocess.run(bash_command, shell=True)
                             detected_targets.add(row[0])
                     elif len(targets_coord.get(row[0])) == 1:
                         x_prev = float(row[1][1:]) / 1000
@@ -67,8 +78,13 @@ while True:
                         if 8000 <= target_speed <= 10000:
                             a, b, c = calcAbc(target_data[1], target_data[0])
                             if checkCollision(a, b, c, spro_x, spro_y, spro_radius):
-                                print('Цель ID:{id} движется в направлении СПРО, скорость = {v:.3f} м/с'
-                                      .format(id=row[0], v=target_speed))
+                                out_text = 'Цель ID:{id} движется' \
+                                           ' в направлении СПРО, скорость = {v:.3f} м/с'.format(id=row[0],
+                                                                                                v=target_speed)
+                                print(out_text)
+                                bash_command = "echo " + str(dtime.now().strftime("%Y-%m-%d %H:%M:%S"))\
+                                               + ' --- ' + sys.argv[1] + ': ' + out_text + " >> Files/LogFile.txt"
+                                subprocess.run(bash_command, shell=True)
                         ignore_targets.add(row[0])
 
         sleep(dt)
