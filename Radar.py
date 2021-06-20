@@ -2,11 +2,45 @@
 
 
 import csv
-from math import sqrt
+from math import sqrt, pi, atan
 from time import sleep
 import sys
 import subprocess
 from datetime import datetime as dtime
+
+
+def createMapIdWithCoord(filename):
+    with open(filename, encoding='utf-8') as r_file:
+        file_reader = csv.reader(r_file, delimiter=",")
+        targets = {}
+        for row in file_reader:
+            target_id = row[0]
+            target_xy = [float(row[1][1:]) / 1000, float(row[2][1:]) / 1000]
+            targets[target_id] = target_xy
+    return targets
+
+
+def checkPoint(radius, x, y, percent, start_angle):
+    end_angle = 360 / percent + start_angle
+    polar_radius = sqrt(x * x + y * y)
+    try:
+        angle = atan(y / x)
+    except ZeroDivisionError:
+        angle = pi / 2
+    if angle < 0:
+        angle += 2 * pi
+    if start_angle <= angle <= end_angle and polar_radius < radius:
+        return True
+    else:
+        return False
+
+
+def checkRLS(point, RLS_x, RLS_y, RLS_alpha, RLS_range, RLS_angle):
+    current_x = point[0] - RLS_x
+    current_y = point[1] - RLS_y
+    percent = (RLS_angle / 360) * 100
+    start_angle = (RLS_alpha - RLS_angle / 2) * pi / 180
+    return checkPoint(RLS_range, current_x, current_y, percent, start_angle)
 
 
 def calcAbc(xy1, xy0):
@@ -44,13 +78,37 @@ filename = 'Files/' + sys.argv[1] + 'Targets'
 bash_command = "echo " + str(dtime.now().strftime("%Y-%m-%d %H:%M:%S"))\
                                            + ' --- ' + sys.argv[1] + ': ' + 'Запущен!' + " >> Files/LogFile.txt"
 subprocess.run(bash_command, shell=True)
+RLS_x = 0
+RLS_y = 0
+RLS_alpha = 0
+RLS_range = 0
+RLS_angle = 0
+if sys.argv[1] == 'Radar1':
+    RLS_x = 3200
+    RLS_y = 3000
+    RLS_alpha = 270
+    RLS_range = 3000
+    RLS_angle = 120
+elif sys.argv[1] == 'Radar2':
+    RLS_x = 8000
+    RLS_y = 6000
+    RLS_alpha = 45
+    RLS_range = 7000
+    RLS_angle = 90
+elif sys.argv[1] == 'Radar3':
+    RLS_x = 8000
+    RLS_y = 3500
+    RLS_alpha = 270
+    RLS_range = 4000
+    RLS_angle = 200
 
 while True:
     try:
-        f = open(filename)
-        for line in f:
-            radar_targets.add(line[:6])  # добавляем в множество цели нужной РЛС
-
+        targets = createMapIdWithCoord('Files/TargetsDataStep.csv')
+        for key, value in targets.items():
+            inside = checkRLS(value, RLS_x, RLS_y, RLS_alpha, RLS_range, RLS_angle)
+            if inside:
+                radar_targets.add(key)
         targets_coord = {}  # {id : [last_xy, prev_xy])
         with open('Files/TargetsDataStep.csv', encoding='utf-8') as r_file:
             file_reader = csv.reader(r_file, delimiter=",")

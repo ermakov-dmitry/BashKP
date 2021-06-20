@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source ./InitParameters.sh
+# source ./InitParameters.sh
 
 rm -rf Files/
 mkdir -p Files
@@ -24,7 +24,7 @@ do
       cat $targets_dir$line >> $StepDir
   done < $last_targets
 
-  python3 ParseTargets.py
+  # python3 ParseTargets.py
 done
 
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import csv
-from math import sqrt
+from math import sqrt, pi, atan
 from time import sleep
 import sqlite3 as sq
 import sys
@@ -20,6 +20,40 @@ cursor.execute("""CREATE TABLE IF NOT EXISTS TargetStatus (
                     status TEXT,
                     fire_obj TEXT)""")
 conn.commit()  # создаем таблицу, если ее нет
+
+
+def createMapIdWithCoord(filename):
+    with open(filename, encoding='utf-8') as r_file:
+        file_reader = csv.reader(r_file, delimiter=",")
+        targets = {}
+        for row in file_reader:
+            target_id = row[0]
+            target_xy = [float(row[1][1:]) / 1000, float(row[2][1:]) / 1000]
+            targets[target_id] = target_xy
+    return targets
+
+
+def checkPoint(radius, x, y, percent, start_angle):
+    end_angle = 360 / percent + start_angle
+    polar_radius = sqrt(x * x + y * y)
+    try:
+        angle = atan(y / x)
+    except ZeroDivisionError:
+        angle = pi / 2
+    if angle < 0:
+        angle += 2 * pi
+    if start_angle <= angle <= end_angle and polar_radius < radius:
+        return True
+    else:
+        return False
+
+
+def checkCircle(point, obj_x, obj_y, obj_range):
+    current_x = point[0] - obj_x
+    current_y = point[1] - obj_y
+    percent = 100
+    start_angle = 0
+    return checkPoint(obj_range, current_x, current_y, percent, start_angle)
 
 
 def calcSpeed(xy0, xy1, dt):
@@ -43,14 +77,13 @@ def findLastFile(target_id):
     pwd = subprocess.run(['pwd'], stdout=subprocess.PIPE)
     pwd_string = pwd.stdout.decode('utf-8').rstrip()
     target_dir = pwd_string + '/Files/LastTargets'
-
     grep_out = subprocess.run(['grep', '-i', target_id, target_dir], stdout=subprocess.PIPE)
     return grep_out.stdout.decode('utf-8').rstrip()[-18:]
 
 
 ammunition = 20
 dt = 1
-spro_targets = set()
+obj_targets = set()
 detected_targets = set()
 filename = 'Files/' + sys.argv[1] + 'Targets'
 system_type = sys.argv[1]  # [6:11]
@@ -61,7 +94,25 @@ message_detect_mode = False
 bash_command = "echo " + str(dtime.now().strftime("%Y-%m-%d %H:%M:%S"))\
                                            + ' --- ' + sys.argv[1] + ': ' + 'Запущен!' + " >> Files/LogFile.txt"
 subprocess.run(bash_command, shell=True)
-
+obj_x = 2500
+obj_y = 2500
+obj_range = 1700
+if system_type == 'SPRO1':
+    obj_x = 2500
+    obj_y = 2500
+    obj_range = 1700
+elif system_type == 'ZRDN1':
+    obj_x = 2950
+    obj_y = 4500
+    obj_range = 600
+elif system_type == 'ZRDN2':
+    obj_x = 4400
+    obj_y = 4100
+    obj_range = 600
+elif system_type == 'ZRDN3':
+    obj_x = 5400
+    obj_y = 3400
+    obj_range = 600
 while True:
     try:
         if ammunition == 0 and not message_detect_mode:
@@ -72,14 +123,16 @@ while True:
             bash_command = "echo " + str(dtime.now().strftime("%Y-%m-%d %H:%M:%S")) \
                            + ' --- ' + sys.argv[1][6:11] + ': ' + out_text + " >> Files/LogFile.txt"
             subprocess.run(bash_command, shell=True)
-        f = open(filename)
-        for line in f:
-            spro_targets.add(line[:6])  # добавляем в множество цели нужной РЛС
+        targets = createMapIdWithCoord('Files/TargetsDataStep.csv')
+        for key, value in targets.items():
+            inside = checkCircle(value, obj_x, obj_y, obj_range)
+            if inside:
+                obj_targets.add(key)
         targets_coord = {}  # {id : [last_xy, prev_xy])
         with open('Files/TargetsDataStep.csv', encoding='utf-8') as r_file:
             file_reader = csv.reader(r_file, delimiter=",")
             for row in reversed(list(file_reader)):
-                if row[0] in spro_targets:
+                if row[0] in obj_targets:
                     if targets_coord.get(row[0]) is None:
                         x_last = float(row[1][1:]) / 1000
                         y_last = float(row[2][1:]) / 1000
