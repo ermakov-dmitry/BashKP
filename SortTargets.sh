@@ -8,7 +8,7 @@ last_targets=`pwd`/Files/LastTargets
 targets_dir=/tmp/GenTargets/Targets/
 StepDir=`pwd`/Files/TargetsDataStep.csv
 :> $last_targets
-num_targets=60  # number of last targets
+num_targets=150  # number of last targets
 
 delta_t=0.5
 for ((;;))

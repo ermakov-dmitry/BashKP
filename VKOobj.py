@@ -3,23 +3,9 @@
 import csv
 from math import sqrt, pi, atan
 from time import sleep
-import sqlite3 as sq
 import sys
 import subprocess
 from datetime import datetime as dtime
-
-global conn
-global cursor
-
-conn = sq.connect('Files/TargetList.db')
-cursor = conn.cursor()
-
-cursor.execute("""CREATE TABLE IF NOT EXISTS TargetStatus (
-                    id TEXT PRIMARY KEY, 
-                    last_file TEXT,
-                    status TEXT,
-                    fire_obj TEXT)""")
-conn.commit()  # создаем таблицу, если ее нет
 
 
 def createMapIdWithCoord(filename):
@@ -27,9 +13,12 @@ def createMapIdWithCoord(filename):
         file_reader = csv.reader(r_file, delimiter=",")
         targets = {}
         for row in file_reader:
-            target_id = row[0]
-            target_xy = [float(row[1][1:]) / 1000, float(row[2][1:]) / 1000]
-            targets[target_id] = target_xy
+            try:
+                target_id = row[0]
+                target_xy = [float(row[1][1:]) / 1000, float(row[2][1:]) / 1000]
+                targets[target_id] = target_xy
+            except IndexError:
+                continue
     return targets
 
 
@@ -62,14 +51,16 @@ def calcSpeed(xy0, xy1, dt):
     return sqrt(vx ** 2 + vy ** 2) * 1000  # m/s
 
 
-def isWaitOrDestroyed(id_):
+def isWaitOrDestroyed(id_, target_list):
     status_ = 'empty'
-    for value in cursor.execute("SELECT * FROM TargetStatus"):
-        if not value:
+    for key, value in target_list.items():
+        if target_list == {}:
             break
-        status_ = value[2]
-        if value[0] == id_ and (status_ == 'wait' or status_ == 'destroyed' or status_ == 'miss'):
+        status_ = value[0]
+        if key == id_ and (status_ == 'wait' or status_ == 'destroyed'):  # or miss
             return True, status_
+        elif key == id_ and status_ == 'miss':
+            return False, status_
     return False, status_
 
 
@@ -85,6 +76,8 @@ ammunition = 20
 dt = 1
 obj_targets = set()
 detected_targets = set()
+destroyed_targets = set()
+status_of_targets = {}  # {id: [status, last_file]}
 filename = 'Files/' + sys.argv[1] + 'Targets'
 system_type = sys.argv[1]  # [6:11]
 if system_type == 'SPRO1':
@@ -152,17 +145,15 @@ while True:
                         targets_coord[row[0]].append([x_prev, y_prev])
                         target_data = targets_coord.get(row[0])  # добавляем список списков с данными по цели
                         target_speed = calcSpeed(target_data[1], target_data[0], dt)
-                        is_wod, target_status = isWaitOrDestroyed(row[0])
+                        is_wod, target_status = isWaitOrDestroyed(row[0], status_of_targets)
                         speed_condition = 50 <= target_speed <= 1000
                         if system_type == 'SPRO1':
                             speed_condition = 8000 <= target_speed <= 10000
                         if speed_condition and not is_wod and fire_mode:
-                            id_ = str(row[0])
+                            id_ = row[0]
                             last_file = findLastFile(id_)
                             status = 'wait'
-                            data = id_, last_file, status, sys.argv[1]
-                            cursor.execute("INSERT INTO TargetStatus VALUES (?, ?, ?, ?)", data)
-                            conn.commit()
+                            status_of_targets[id_] = [status, last_file]
                             out_text = 'Пуск ракеты по цели {id}'.format(id=id_)
                             print(out_text)  #
                             bash_command = "echo " + str(dtime.now().strftime("%Y-%m-%d %H:%M:%S")) \
@@ -172,7 +163,25 @@ while True:
                             write_dir = '/tmp/GenTargets/Destroy/' + id_  # write to tmp/Destroy
                             open(write_dir, 'w+').close()  # гентаргетс при перезаписи промаха неизвестно
 
-        sleep(dt)
+        sleep(dt + 3)  # после идет проверка на попадание
+
+        for key, value in status_of_targets.items():
+            new_file = findLastFile(key)
+            last_file = value[1]
+            if new_file == last_file and key not in destroyed_targets:
+                destroyed_targets.add(key)
+                out_text = 'Цель {id_} поражена'.format(id_=key)
+                status_of_targets[key] = ['destroyed', new_file]
+                print(out_text)
+                bash_command = "echo " + str(dtime.now().strftime("%Y-%m-%d %H:%M:%S")) \
+                               + ' --- ' + system_type + ': ' + out_text + " >> Files/LogFile.txt"
+                subprocess.run(bash_command, shell=True)
+            elif new_file != last_file and key not in destroyed_targets:
+                out_text = 'Промах по цели {id_}'.format(id_=row[0])
+                status_of_targets[key] = ['miss', new_file]
+                print(out_text)
+                bash_command = "echo " + str(dtime.now().strftime("%Y-%m-%d %H:%M:%S")) \
+                               + ' --- ' + system_type + ': ' + out_text + " >> Files/LogFile.txt"
+                subprocess.run(bash_command, shell=True)
     except ValueError:
         continue
-conn.close()

@@ -14,9 +14,12 @@ def createMapIdWithCoord(filename):
         file_reader = csv.reader(r_file, delimiter=",")
         targets = {}
         for row in file_reader:
-            target_id = row[0]
-            target_xy = [float(row[1][1:]) / 1000, float(row[2][1:]) / 1000]
-            targets[target_id] = target_xy
+            try:
+                target_id = row[0]
+                target_xy = [float(row[1][1:]) / 1000, float(row[2][1:]) / 1000]
+                targets[target_id] = target_xy
+            except IndexError:
+                continue
     return targets
 
 
@@ -146,5 +149,5 @@ while True:
                         ignore_targets.add(row[0])
 
         sleep(dt)
-    except ValueError:
+    except:
         continue
