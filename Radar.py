@@ -5,6 +5,8 @@ import csv
 from math import sqrt, pi, atan
 from time import sleep
 import sys
+import os
+import signal
 import subprocess
 from datetime import datetime as dtime
 
@@ -70,6 +72,7 @@ def calcSpeed(xy0, xy1, dt):
     return sqrt(vx ** 2 + vy ** 2) * 1000  # m/s
 
 
+pid = os.getpid()
 dt = 1
 radar_targets = set()
 ignore_targets = set()
@@ -149,5 +152,9 @@ while True:
                         ignore_targets.add(row[0])
 
         sleep(dt)
-    except:
+    except ValueError:
         continue
+    except KeyboardInterrupt:
+        # print("Press Ctrl-C to terminate while statement")
+        os.kill(pid, signal.SIGKILL)
+        pass
