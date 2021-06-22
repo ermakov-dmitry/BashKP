@@ -5,12 +5,10 @@ import os
 import subprocess
 import sys
 import signal
+import socket
 from time import sleep
 from math import sqrt, atan, pi
-
-
-def get_pid():
-    return os.getpid()
+from datetime import datetime as dtime
 
 
 def check_point(radius, x, y, percent, start_angle):
@@ -32,6 +30,14 @@ def calc_speed(xy0, xy1, dt):
     vx = (xy1[0] - xy0[0]) / dt
     vy = (xy1[1] - xy0[1]) / dt
     return sqrt(vx ** 2 + vy ** 2) * 1000  # m/s
+
+
+def send_message_to_kp(message):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect(('localhost', 55000))
+    sock.send(bytes(str(dtime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' - ' + sys.argv[1] + ': ' + message,
+                    encoding='UTF-8'))
+    sock.close()
 
 
 class Shooter:
@@ -130,6 +136,7 @@ class Shooter:
                                                                                                y=y_prev)
                     print(out_text)
                     # send socket message to VKO
+                    send_message_to_kp(out_text)
                     self.detected_targets.add(id_target)
             elif id_target not in self.destroyed_targets and len(targets.get(id_target)) == 1:
                 x_last = row[1]
@@ -145,28 +152,30 @@ class Shooter:
                     out_text = 'Пуск ракеты по цели {id}'.format(id=id_target)
                     print(out_text)
                     # send socket message to VKO
+                    send_message_to_kp(out_text)
                     self.ammunition -= 1
                     write_dir = '/tmp/GenTargets/Destroy/' + id_target  # write to tmp/Destroy
                     open(write_dir, 'w+').close()
 
     def check_targets(self):
         for key, value in list(self.wait_targets.items()):
-            new_file = self.find_last_file(key)  # !!! нужно чекать новый лист
+            new_file = self.find_last_file(key)
             last_file = value
             if new_file == last_file:
                 self.destroyed_targets.add(key)
                 out_text = 'Цель {id_} поражена'.format(id_=key)
                 print(out_text)
                 # send socket message to VKO
+                send_message_to_kp(out_text)
                 self.wait_targets.pop(key)
             else:
                 out_text = 'Промах по цели {id_}'.format(id_=key)
                 print(out_text)
                 # send socket message to VKO
+                send_message_to_kp(out_text)
 
 
 object_vko = Shooter(sys.argv[1])
-pid = get_pid()
 while True:
     try:
         object_vko.define_and_shoot_targets()
@@ -174,7 +183,11 @@ while True:
         object_vko.check_targets()
     except KeyboardInterrupt:
         # send socket message to VKO
-        os.kill(pid, signal.SIGKILL)
+        send_message_to_kp('Остановлен!')
+        os.kill(os.getpid(), signal.SIGKILL)
         pass
+    except ConnectionRefusedError:
+        print('Отсутствует связь с КП ВКО!')
+        sleep(1)
     except FileNotFoundError:
         continue
