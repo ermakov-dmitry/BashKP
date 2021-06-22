@@ -1,31 +1,19 @@
 #!/usr/bin/env python
 
 
-import csv
-from math import sqrt, pi, atan
-from time import sleep
-import sys
 import os
-import signal
 import subprocess
-from datetime import datetime as dtime
+import sys
+import signal
+from time import sleep
+from math import sqrt, atan, pi
 
 
-def createMapIdWithCoord(filename):
-    with open(filename, encoding='utf-8') as r_file:
-        file_reader = csv.reader(r_file, delimiter=",")
-        targets = {}
-        for row in file_reader:
-            try:
-                target_id = row[0]
-                target_xy = [float(row[1][1:]) / 1000, float(row[2][1:]) / 1000]
-                targets[target_id] = target_xy
-            except IndexError:
-                continue
-    return targets
+def get_pid():
+    return os.getpid()
 
 
-def checkPoint(radius, x, y, percent, start_angle):
+def check_point(radius, x, y, percent, start_angle):
     end_angle = 360 / percent + start_angle
     polar_radius = sqrt(x * x + y * y)
     try:
@@ -40,22 +28,14 @@ def checkPoint(radius, x, y, percent, start_angle):
         return False
 
 
-def checkRLS(point, RLS_x, RLS_y, RLS_alpha, RLS_range, RLS_angle):
-    current_x = point[0] - RLS_x
-    current_y = point[1] - RLS_y
-    percent = (RLS_angle / 360) * 100
-    start_angle = (RLS_alpha - RLS_angle / 2) * pi / 180
-    return checkPoint(RLS_range, current_x, current_y, percent, start_angle)
-
-
-def calcAbc(xy1, xy0):
+def calc_abc(xy1, xy0):
     k = (xy1[1] - xy0[1]) / (xy1[0] - xy0[0])
     yp = k * xy0[0]
     b = xy0[1] - yp
     return -k, 1, -b
 
 
-def checkCollision(a, b, c, x, y, radius):
+def check_collision(a, b, c, x, y, radius):
     dist = ((abs(a * x + b * y + c)) /
             sqrt(a * a + b * b))
     if radius == dist:
@@ -66,95 +46,105 @@ def checkCollision(a, b, c, x, y, radius):
         return False
 
 
-def calcSpeed(xy0, xy1, dt):
+def calc_speed(xy0, xy1, dt):
     vx = (xy1[0] - xy0[0]) / dt
     vy = (xy1[1] - xy0[1]) / dt
     return sqrt(vx ** 2 + vy ** 2) * 1000  # m/s
 
 
-pid = os.getpid()
-dt = 1
-radar_targets = set()
-ignore_targets = set()
-detected_targets = set()
-spro_x = 2500
-spro_y = 2500
-spro_radius = 1700
-filename = 'Files/' + sys.argv[1] + 'Targets'
-bash_command = "echo " + str(dtime.now().strftime("%Y-%m-%d %H:%M:%S"))\
-                                           + ' --- ' + sys.argv[1] + ': ' + 'Запущен!' + " >> Files/LogFile.txt"
-subprocess.run(bash_command, shell=True)
-RLS_x = 0
-RLS_y = 0
-RLS_alpha = 0
-RLS_range = 0
-RLS_angle = 0
-if sys.argv[1] == 'Radar1':
-    RLS_x = 3200
-    RLS_y = 3000
-    RLS_alpha = 270
-    RLS_range = 3000
-    RLS_angle = 120
-elif sys.argv[1] == 'Radar2':
-    RLS_x = 8000
-    RLS_y = 6000
-    RLS_alpha = 45
-    RLS_range = 7000
-    RLS_angle = 90
-elif sys.argv[1] == 'Radar3':
-    RLS_x = 8000
-    RLS_y = 3500
-    RLS_alpha = 270
-    RLS_range = 4000
-    RLS_angle = 200
+class Radar:
+    def __init__(self, name):
+        self.name = name
+        self.dt = 1
+        self.ignore_targets = set()
+        self.detected_targets = set()
+        self.spro_x = 2500
+        self.spro_y = 2500
+        self.spro_radius = 1700
+        self.num_last_targets = 100
+        if name == 'Radar1':
+            self.x = 3200
+            self.y = 3000
+            self.alpha = 270
+            self.range = 3000
+            self.angle = 120
+        elif name == 'Radar2':
+            self.x = 8000
+            self.y = 6000
+            self.alpha = 45
+            self.range = 7000
+            self.angle = 90
+        elif name == 'Radar3':
+            self.x = 8000
+            self.y = 3500
+            self.alpha = 270
+            self.range = 4000
+            self.angle = 200
+        else:
+            print('Unknown radar')
+            exit(1)
 
+    def check_rls(self, point):
+        current_x = point[0] - self.x
+        current_y = point[1] - self.y
+        percent = (self.angle / 360) * 100
+        start_angle = (self.alpha - self.angle / 2) * pi / 180
+        return check_point(self.range, current_x, current_y, percent, start_angle)
+
+    def find_last_targets(self):
+        target_list = []
+        list_last_files = subprocess.run(['ls', '-t', '/tmp/GenTargets/Targets'], stdout=subprocess.PIPE)
+        for line in list_last_files.stdout.decode('utf-8').rstrip().splitlines()[-self.num_last_targets:]:
+            data = open('/tmp/GenTargets/Targets/' + line, 'r')
+            xy = data.read().splitlines()[0].split(',')
+            x = float(xy[0][1:]) / 1000
+            y = float(xy[1][1:]) / 1000
+            inside = self.check_rls([x, y])
+            if inside:
+                target_list.append([line[-6:], x, y])  # [id, x, y]
+        return target_list
+
+    def define_targets(self):
+        targets = {}  # {id : [prev_xy, last_xy])
+        for row in self.find_last_targets():
+            id_target = row[0]
+            if id_target not in self.ignore_targets and targets.get(id_target) is None:
+                x_prev = row[1]
+                y_prev = row[2]
+                targets[id_target] = [[x_prev, y_prev]]  # prev_xy
+                if id_target not in self.detected_targets:
+                    out_text = 'Обнаружена цель ID:{id} с координатами x = {x} y = {y}'.format(id=row[0],
+                                                                                               x=x_prev,
+                                                                                               y=y_prev)
+                    print(out_text)
+                    # send socket message to VKO
+                    self.detected_targets.add(id_target)
+            elif id_target not in self.ignore_targets and len(targets.get(id_target)) == 1:
+                x_last = row[1]
+                y_last = row[2]
+                targets[id_target].append([x_last, y_last])  # last_xy
+                target_data = targets.get(id_target)
+                target_speed = calc_speed(target_data[0], target_data[1], self.dt)
+                if 8000 <= target_speed <= 10000:
+                    a, b, c = calc_abc(target_data[0], target_data[1])
+                    if check_collision(a, b, c, self.spro_x, self.spro_y, self.spro_radius):
+                        out_text = 'Цель ID:{id} движется' \
+                                   ' в направлении СПРО, скорость = {v:.3f} м/с'.format(id=row[0],
+                                                                                        v=target_speed)
+                        print(out_text)
+                        # send socket message to VKO
+                        self.ignore_targets.add(id_target)
+
+
+radar = Radar(sys.argv[1])
+pid = get_pid()
 while True:
     try:
-        targets = createMapIdWithCoord('Files/TargetsDataStep.csv')
-        for key, value in targets.items():
-            inside = checkRLS(value, RLS_x, RLS_y, RLS_alpha, RLS_range, RLS_angle)
-            if inside:
-                radar_targets.add(key)
-        targets_coord = {}  # {id : [last_xy, prev_xy])
-        with open('Files/TargetsDataStep.csv', encoding='utf-8') as r_file:
-            file_reader = csv.reader(r_file, delimiter=",")
-            for row in reversed(list(file_reader)):
-                if row[0] in radar_targets and row[0] not in ignore_targets:  # если id в
-                    if targets_coord.get(row[0]) is None:
-                        x_last = float(row[1][1:]) / 1000
-                        y_last = float(row[2][1:]) / 1000
-                        targets_coord[row[0]] = [[x_last, y_last]]
-                        if row[0] not in detected_targets:
-                            out_text = 'Обнаружена цель ID:{id} с координатами x = {x} y = {y}'.format(id=row[0],
-                                                                                                       x=x_last,
-                                                                                                       y=y_last)
-                            print(out_text)
-                            bash_command = "echo " + str(dtime.now().strftime("%Y-%m-%d %H:%M:%S"))\
-                                           + ' --- ' + sys.argv[1] + ': ' + out_text + " >> Files/LogFile.txt"
-                            subprocess.run(bash_command, shell=True)
-                            detected_targets.add(row[0])
-                    elif len(targets_coord.get(row[0])) == 1:
-                        x_prev = float(row[1][1:]) / 1000
-                        y_prev = float(row[2][1:]) / 1000
-                        targets_coord[row[0]].append([x_prev, y_prev])
-                        target_data = targets_coord.get(row[0])  # добавляем список списков с данными по цели
-                        target_speed = calcSpeed(target_data[1], target_data[0], dt)
-                        if 8000 <= target_speed <= 10000:
-                            a, b, c = calcAbc(target_data[1], target_data[0])
-                            if checkCollision(a, b, c, spro_x, spro_y, spro_radius):
-                                out_text = 'Цель ID:{id} движется' \
-                                           ' в направлении СПРО, скорость = {v:.3f} м/с'.format(id=row[0],
-                                                                                                v=target_speed)
-                                print(out_text)
-                                bash_command = "echo " + str(dtime.now().strftime("%Y-%m-%d %H:%M:%S"))\
-                                               + ' --- ' + sys.argv[1] + ': ' + out_text + " >> Files/LogFile.txt"
-                                subprocess.run(bash_command, shell=True)
-                        ignore_targets.add(row[0])
-
-        sleep(dt)
-    except ValueError:
-        continue
+        radar.define_targets()
+        sleep(radar.dt)
     except KeyboardInterrupt:
-        # print("Press Ctrl-C to terminate while statement")
+        # send socket message to VKO
         os.kill(pid, signal.SIGKILL)
         pass
+    except FileNotFoundError:
+        continue

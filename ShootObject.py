@@ -34,14 +34,6 @@ def calc_speed(xy0, xy1, dt):
     return sqrt(vx ** 2 + vy ** 2) * 1000  # m/s
 
 
-def find_last_file(target_id):
-    pwd = subprocess.run(['pwd'], stdout=subprocess.PIPE)
-    pwd_string = pwd.stdout.decode('utf-8').rstrip()
-    target_dir = pwd_string + '/Files/LastTargets'
-    grep_out = subprocess.run(['grep', '-i', target_id, target_dir], stdout=subprocess.PIPE)
-    return grep_out.stdout.decode('utf-8').rstrip()[-18:]
-
-
 class Shooter:
     def __init__(self, name):
         self.name = name
@@ -51,7 +43,7 @@ class Shooter:
         self.destroyed_targets = set()
         self.fire_mode = True
         self.message_detect_mode = False
-        self.num_last_targets = 150
+        self.num_last_targets = 100
         if name == 'SPRO1':
             self.x = 2500
             self.y = 2500
@@ -83,10 +75,19 @@ class Shooter:
         start_angle = 0
         return check_point(self.range, current_x, current_y, percent, start_angle)
 
+    def find_list_of_last_files(self):
+        last_files = subprocess.run(['ls', '-t', '/tmp/GenTargets/Targets'], stdout=subprocess.PIPE)
+        return last_files.stdout.decode('utf-8').rstrip().splitlines()[-self.num_last_targets:]
+
+    def find_last_file(self, target_id):
+        last_files = self.find_list_of_last_files()
+        for filename in last_files:
+            if filename.find(target_id) != -1:
+                return filename
+
     def find_last_targets(self):
         target_list = []
-        list_last_files = subprocess.run(['ls', '-t', '/tmp/GenTargets/Targets'], stdout=subprocess.PIPE)
-        for line in list_last_files.stdout.decode('utf-8').rstrip().splitlines()[-self.num_last_targets:]:
+        for line in self.find_list_of_last_files():
             data = open('/tmp/GenTargets/Targets/' + line, 'r')
             xy = data.read().splitlines()[0].split(',')
             x = float(xy[0][1:]) / 1000
@@ -139,7 +140,7 @@ class Shooter:
                 speed_cond = self.speed_condition(target_speed)
                 amm_cond = self.check_ammunition()
                 if speed_cond and amm_cond and id_target not in self.destroyed_targets:
-                    last_file = find_last_file(id_target)
+                    last_file = self.find_last_file(id_target)  # !!!
                     self.wait_targets[id_target] = last_file
                     out_text = 'Пуск ракеты по цели {id}'.format(id=id_target)
                     print(out_text)
@@ -150,7 +151,7 @@ class Shooter:
 
     def check_targets(self):
         for key, value in list(self.wait_targets.items()):
-            new_file = find_last_file(key)
+            new_file = self.find_last_file(key)  # !!! нужно чекать новый лист
             last_file = value
             if new_file == last_file:
                 self.destroyed_targets.add(key)
