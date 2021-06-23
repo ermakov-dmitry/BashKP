@@ -51,11 +51,14 @@ def calc_speed(xy0, xy1, dt):
 
 
 def send_message_to_kp(message):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect(('localhost', 55000))
-    sock.send(bytes(str(dtime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' - ' + sys.argv[1] + ': ' + message,
-                    encoding='UTF-8'))
-    sock.close()
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect(('localhost', 55000))
+        sock.send(bytes(str(dtime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' - ' + sys.argv[1] + ': ' + message,
+                        encoding='UTF-8'))
+        sock.close()
+    except ConnectionRefusedError:
+        print('Отсутствует связь с КП ВКО!')
 
 
 class Radar:
@@ -100,7 +103,7 @@ class Radar:
     def find_last_targets(self):
         target_list = []
         list_last_files = subprocess.run(['ls', '-t', '/tmp/GenTargets/Targets'], stdout=subprocess.PIPE)
-        for line in list_last_files.stdout.decode('utf-8').rstrip().splitlines()[-self.num_last_targets:]:
+        for line in reversed(list_last_files.stdout.decode('utf-8').rstrip().splitlines()[-self.num_last_targets:]):
             data = open('/tmp/GenTargets/Targets/' + line, 'r')
             xy = data.read().splitlines()[0].split(',')
             x = float(xy[0][1:]) / 1000
@@ -119,7 +122,7 @@ class Radar:
                 y_prev = row[2]
                 targets[id_target] = [[x_prev, y_prev]]  # prev_xy
                 if id_target not in self.detected_targets:
-                    out_text = 'Обнаружена цель ID:{id} с координатами x = {x} y = {y}'.format(id=row[0],
+                    out_text = 'Обнаружена цель ID: {id} с координатами x = {x} y = {y}'.format(id=row[0],
                                                                                                x=x_prev,
                                                                                                y=y_prev)
                     print(out_text)
@@ -145,6 +148,7 @@ class Radar:
 
 
 radar = Radar(sys.argv[1])
+send_message_to_kp('Запущен!')
 while True:
     try:
         radar.define_targets()
@@ -154,7 +158,5 @@ while True:
         send_message_to_kp('Остановлен!')
         os.kill(os.getpid(), signal.SIGKILL)
         pass
-    except ConnectionRefusedError:
-        print('Отсутствует связь с КП ВКО!')
     except FileNotFoundError:
         continue

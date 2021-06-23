@@ -33,11 +33,14 @@ def calc_speed(xy0, xy1, dt):
 
 
 def send_message_to_kp(message):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect(('localhost', 55000))
-    sock.send(bytes(str(dtime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' - ' + sys.argv[1] + ': ' + message,
-                    encoding='UTF-8'))
-    sock.close()
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect(('localhost', 55000))
+        sock.send(bytes(str(dtime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' - ' + sys.argv[1] + ': ' + message,
+                        encoding='UTF-8'))
+        sock.close()
+    except ConnectionRefusedError:
+        print('Отсутствует связь с КП ВКО!')
 
 
 class Shooter:
@@ -83,7 +86,7 @@ class Shooter:
 
     def find_list_of_last_files(self):
         last_files = subprocess.run(['ls', '-t', '/tmp/GenTargets/Targets'], stdout=subprocess.PIPE)
-        return last_files.stdout.decode('utf-8').rstrip().splitlines()[-self.num_last_targets:]
+        return reversed(last_files.stdout.decode('utf-8').rstrip().splitlines()[-self.num_last_targets:])
 
     def find_last_file(self, target_id):
         last_files = self.find_list_of_last_files()
@@ -176,18 +179,16 @@ class Shooter:
 
 
 object_vko = Shooter(sys.argv[1])
+send_message_to_kp('Запущен!')
 while True:
     try:
         object_vko.define_and_shoot_targets()
-        sleep(2)
+        sleep(3)
         object_vko.check_targets()
     except KeyboardInterrupt:
         # send socket message to VKO
         send_message_to_kp('Остановлен!')
         os.kill(os.getpid(), signal.SIGKILL)
         pass
-    except ConnectionRefusedError:
-        print('Отсутствует связь с КП ВКО!')
-        sleep(1)
     except FileNotFoundError:
         continue
