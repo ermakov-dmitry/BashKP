@@ -3,12 +3,22 @@
 
 import os
 import subprocess
+import ctypes
 import sys
 import signal
 import socket
+from platform import system
 from time import sleep
 from math import sqrt, atan, pi
 from datetime import datetime as dtime
+
+
+def is_admin():
+    try:
+        is_adm = (os.getuid() == 0)
+    except AttributeError:
+        is_adm = ctypes.windll.shell32.IsUserAnAdmin() != 0
+    return is_adm
 
 
 def check_point(radius, x, y, percent, start_angle):
@@ -86,7 +96,7 @@ class Shooter:
 
     def find_list_of_last_files(self):
         last_files = subprocess.run(['ls', '-t', '/tmp/GenTargets/Targets'], stdout=subprocess.PIPE)
-        return reversed(last_files.stdout.decode('utf-8').rstrip().splitlines()[-self.num_last_targets:])
+        return last_files.stdout.decode('utf-8').rstrip().splitlines()[:self.num_last_targets]
 
     def find_last_file(self, target_id):
         last_files = self.find_list_of_last_files()
@@ -96,7 +106,7 @@ class Shooter:
 
     def find_last_targets(self):
         target_list = []
-        for line in self.find_list_of_last_files():
+        for line in reversed(self.find_list_of_last_files()):
             data = open('/tmp/GenTargets/Targets/' + line, 'r')
             xy = data.read().splitlines()[0].split(',')
             x = float(xy[0][1:]) / 1000
@@ -112,7 +122,7 @@ class Shooter:
             self.message_detect_mode = True
             out_text = 'Закончился боекомплект, переход в режим обнаружения'
             print(out_text)
-            # send socket message to VKO
+            send_message_to_kp(out_text)
             return False
         elif not self.fire_mode:
             return False
@@ -138,7 +148,6 @@ class Shooter:
                                                                                                x=x_prev,
                                                                                                y=y_prev)
                     print(out_text)
-                    # send socket message to VKO
                     send_message_to_kp(out_text)
                     self.detected_targets.add(id_target)
             elif id_target not in self.destroyed_targets and len(targets.get(id_target)) == 1:
@@ -154,7 +163,6 @@ class Shooter:
                     self.wait_targets[id_target] = last_file
                     out_text = 'Пуск ракеты по цели {id}'.format(id=id_target)
                     print(out_text)
-                    # send socket message to VKO
                     send_message_to_kp(out_text)
                     self.ammunition -= 1
                     write_dir = '/tmp/GenTargets/Destroy/' + id_target  # write to tmp/Destroy
@@ -168,25 +176,25 @@ class Shooter:
                 self.destroyed_targets.add(key)
                 out_text = 'Цель {id_} поражена'.format(id_=key)
                 print(out_text)
-                # send socket message to VKO
                 send_message_to_kp(out_text)
                 self.wait_targets.pop(key)
             else:
                 out_text = 'Промах по цели {id_}'.format(id_=key)
                 print(out_text)
-                # send socket message to VKO
                 send_message_to_kp(out_text)
 
 
+if is_admin() or system() != 'Linux':
+    print('Ошибка! Запуск с ОС, отличной от Linux, или запуск с правами администратора.')
+    exit(1)
 object_vko = Shooter(sys.argv[1])
 send_message_to_kp('Запущен!')
 while True:
     try:
         object_vko.define_and_shoot_targets()
-        sleep(3)
+        sleep(2)
         object_vko.check_targets()
     except KeyboardInterrupt:
-        # send socket message to VKO
         send_message_to_kp('Остановлен!')
         os.kill(os.getpid(), signal.SIGKILL)
         pass

@@ -4,11 +4,21 @@
 import os
 import subprocess
 import sys
+import ctypes
 import socket
 import signal
 from time import sleep
+from platform import system
 from math import sqrt, atan, pi
 from datetime import datetime as dtime
+
+
+def is_admin():
+    try:
+        is_adm = (os.getuid() == 0)
+    except AttributeError:
+        is_adm = ctypes.windll.shell32.IsUserAnAdmin() != 0
+    return is_adm
 
 
 def check_point(radius, x, y, percent, start_angle):
@@ -103,7 +113,7 @@ class Radar:
     def find_last_targets(self):
         target_list = []
         list_last_files = subprocess.run(['ls', '-t', '/tmp/GenTargets/Targets'], stdout=subprocess.PIPE)
-        for line in reversed(list_last_files.stdout.decode('utf-8').rstrip().splitlines()[-self.num_last_targets:]):
+        for line in reversed(list_last_files.stdout.decode('utf-8').rstrip().splitlines()[:self.num_last_targets]):
             data = open('/tmp/GenTargets/Targets/' + line, 'r')
             xy = data.read().splitlines()[0].split(',')
             x = float(xy[0][1:]) / 1000
@@ -123,10 +133,9 @@ class Radar:
                 targets[id_target] = [[x_prev, y_prev]]  # prev_xy
                 if id_target not in self.detected_targets:
                     out_text = 'Обнаружена цель ID: {id} с координатами x = {x} y = {y}'.format(id=row[0],
-                                                                                               x=x_prev,
-                                                                                               y=y_prev)
+                                                                                                x=x_prev,
+                                                                                                y=y_prev)
                     print(out_text)
-                    # send socket message to VKO
                     send_message_to_kp(out_text)
                     self.detected_targets.add(id_target)
             elif id_target not in self.ignore_targets and len(targets.get(id_target)) == 1:
@@ -142,11 +151,13 @@ class Radar:
                                    ' в направлении СПРО, скорость = {v:.3f} м/с'.format(id=row[0],
                                                                                         v=target_speed)
                         print(out_text)
-                        # send socket message to VKO
                         send_message_to_kp(out_text)
                         self.ignore_targets.add(id_target)
 
 
+if is_admin() or system() != 'Linux':
+    print('Ошибка! Запуск с ОС, отличной от Linux, или запуск с правами администратора.')
+    exit(1)
 radar = Radar(sys.argv[1])
 send_message_to_kp('Запущен!')
 while True:
@@ -154,7 +165,6 @@ while True:
         radar.define_targets()
         sleep(radar.dt)
     except KeyboardInterrupt:
-        # send socket message to VKO
         send_message_to_kp('Остановлен!')
         os.kill(os.getpid(), signal.SIGKILL)
         pass
